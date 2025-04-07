@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Game Avanzado</title>
+  <style>
+    /* Estilos generales */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+    }
+    #game-container {
+      max-width: 800px;
+      width: 100%;
+      text-align: center;
+    }
+    #stats {
+      margin-bottom: 10px;
+    }
+    #stats span {
+      margin: 0 10px;
+      font-size: 1.2em;
+    }
+    /* Botón de reinicio */
+    #restart {
+      margin-bottom: 20px;
+      padding: 10px 20px;
+      font-size: 1em;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #restart:hover {
+      background-color: #45a049;
+    }
+    /* Tablero de juego */
+    #game-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    /* Estilos de cada carta */
+    .card {
+      width: 100%;
+      padding-top: 100%; /* Relación 1:1 */
+      position: relative;
+      perspective: 1000px;
+    }
+    .card-inner {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+      cursor: pointer;
+    }
+    /* Evitamos que los elementos internos capturen el clic */
+    .card-front, .card-back {
+      pointer-events: none;
+    }
+    /* Efecto flip */
+    .card.flip .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2em;
+    }
+    .card-front {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .card-back {
+      background-color: #fff;
+      border: 2px solid #4CAF50;
+      transform: rotateY(180deg);
+    }
+    /* Mensaje final */
+    #message {
+      font-size: 1.5em;
+      margin-top: 20px;
+      color: #4CAF50;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <h1>Juego Memory Avanzado</h1>
+    <div id="stats">
+      <span id="moves">Movimientos: 0</span>
+      <span id="time">Tiempo: 0s</span>
+    </div>
+    <button id="restart">Reiniciar Juego</button>
+    <div id="game-board"></div>
+    <div id="message"></div>
+  </div>
+  <script>
+    // Función para mezclar un arreglo (algoritmo Fisher-Yates)
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+    
+    class MemoryGame {
+      constructor(boardElement, movesElement, timeElement, messageElement) {
+        this.boardElement = boardElement;
+        this.movesElement = movesElement;
+        this.timeElement = timeElement;
+        this.messageElement = messageElement;
+        this.cards = [];
+        this.firstCard = null;
+        this.secondCard = null;
+        this.lockBoard = false;
+        this.moves = 0;
+        this.matchesFound = 0;
+        this.totalPairs = 8; // Número de pares (se pueden aumentar para mayor complejidad)
+        this.timer = null;
+        this.secondsElapsed = 0;
+        // Lista de símbolos para las cartas (puedes agregar más para mayor variedad)
+        this.symbols = ['🍎','🍌','🍇','🍓','🍍','🥝','🍒','🍑','🥥','🍉','🍋','🍈','🍐','🍏','🍊','🥭'];
+      }
+      
+      iniciarJuego() {
+        this.resetJuego();
+        this.generarCartas();
+        this.startTimer();
+      }
+      
+      // Reinicia el juego a su estado inicial
+      resetJuego() {
+        clearInterval(this.timer);
+        this.boardElement.innerHTML = '';
+        this.cards = [];
+        this.firstCard = null;
+        this.secondCard = null;
+        this.lockBoard = false;
+        this.moves = 0;
+        this.matchesFound = 0;
+        this.secondsElapsed = 0;
+        this.updateStats();
+        this.messageElement.textContent = '';
+      }
+      
+      // Inicia el temporizador
+      startTimer() {
+        this.timer = setInterval(() => {
+          this.secondsElapsed++;
+          this.updateStats();
+        }, 1000);
+      }
+      
+      // Actualiza las estadísticas mostradas en pantalla
+      updateStats() {
+        this.movesElement.textContent = `Movimientos: ${this.moves}`;
+        this.timeElement.textContent = `Tiempo: ${this.secondsElapsed}s`;
+      }
+      
+      // Genera el tablero de cartas
+      generarCartas() {
+        // Seleccionar aleatoriamente símbolos y duplicarlos para formar pares
+        let selectedSymbols = shuffle(this.symbols).slice(0, this.totalPairs);
+        let cardSymbols = selectedSymbols.concat(selectedSymbols);
+        cardSymbols = shuffle(cardSymbols);
+        
+        // Crear elementos de carta para cada símbolo
+        cardSymbols.forEach(symbol => {
+          const card = document.createElement('div');
+          card.classList.add('card');
+          
+          const cardInner = document.createElement('div');
+          cardInner.classList.add('card-inner');
+          
+          const cardFront = document.createElement('div');
+          cardFront.classList.add('card-front');
+          cardFront.textContent = '?';
+          
+          const cardBack = document.createElement('div');
+          cardBack.classList.add('card-back');
+          cardBack.textContent = symbol;
+          
+          cardInner.appendChild(cardFront);
+          cardInner.appendChild(cardBack);
+          card.appendChild(cardInner);
+          
+          // Asigna el símbolo como dato de la carta
+          card.dataset.symbol = symbol;
+          
+          // Agrega el evento de clic para voltear la carta
+          card.addEventListener('click', () => this.flipCard(card));
+          
+          // Agrega la carta al tablero
+          this.boardElement.appendChild(card);
+          this.cards.push(card);
+        });
+      }
+      
+      // Lógica para voltear una carta
+      flipCard(card) {
+        if (this.lockBoard || card === this.firstCard || card.classList.contains('flip')) {
+          return;
+        }
+        card.classList.add('flip');
+        
+        if (!this.firstCard) {
+          this.firstCard = card;
+          return;
+        }
+        
+        this.secondCard = card;
+        this.moves++;
+        this.updateStats();
+        this.checkForMatch();
+      }
+      
+      // Verifica si las dos cartas seleccionadas coinciden
+      checkForMatch() {
+        const symbol1 = this.firstCard.dataset.symbol;
+        const symbol2 = this.secondCard.dataset.symbol;
+        
+        if (symbol1 === symbol2) {
+          // Coincidencia encontrada
+          this.disableCards();
+          this.matchesFound++;
+          if (this.matchesFound === this.totalPairs) {
+            this.endGame();
+          }
+        } else {
+          // No coinciden
+          this.unflipCards();
+        }
+      }
+      
+      // Deshabilita las cartas que han coincidido
+      disableCards() {
+        // Deshabilitamos los clics en las cartas ya emparejadas
+        this.firstCard.style.pointerEvents = 'none';
+        this.secondCard.style.pointerEvents = 'none';
+        this.resetBoard();
+      }
+      
+      // Vuelve a voltear las cartas en caso de no coincidir
+      unflipCards() {
+        this.lockBoard = true;
+        setTimeout(() => {
+          this.firstCard.classList.remove('flip');
+          this.secondCard.classList.remove('flip');
+          this.resetBoard();
+        }, 1000);
+      }
+      
+      // Reinicia las variables de control de cartas
+      resetBoard() {
+        this.firstCard = null;
+        this.secondCard = null;
+        this.lockBoard = false;
+      }
+      
+      // Finaliza el juego y muestra un mensaje de victoria
+      endGame() {
+        clearInterval(this.timer);
+        this.messageElement.textContent = `¡Felicidades! Has completado el juego en ${this.moves} movimientos y ${this.secondsElapsed} segundos.`;
+      }
+    }
+    
+    // Inicializa el juego una vez que el DOM esté cargado
+    document.addEventListener('DOMContentLoaded', () => {
+      const boardElement = document.getElementById('game-board');
+      const movesElement = document.getElementById('moves');
+      const timeElement = document.getElementById('time');
+      const messageElement = document.getElementById('message');
+      const restartButton = document.getElementById('restart');
+      
+      let game = new MemoryGame(boardElement, movesElement, timeElement, messageElement);
+      game.iniciarJuego();
+      
+      restartButton.addEventListener('click', () => {
+        game.iniciarJuego();
+      });
+    });
+  </script>
+</body>
+</html>

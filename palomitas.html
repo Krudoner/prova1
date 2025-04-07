@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cubo de Palomitas Redondo</title>
+  <style>
+    /* RESET BÁSICO Y CENTRADO DE PANTALLA */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #fafafa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .container {
+      position: relative;
+      width: 200px;   /* Ancho mayor */
+      height: 320px;  /* Altura mayor */
+      cursor: pointer;
+    }
+
+    /* CUBO (forma más redondeada, tipo barril/cilindro) */
+    .bucket {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        90deg,
+        #fff 0 20px,
+        #e60000 20px 40px
+      );
+      border: 2px solid #e60000;
+      /* Para simular un barril/cubo redondeado */
+      border-radius: 100px / 40px; 
+      /* Sin perspectiva para que luzca más "redondo" */
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    /* LOGO OPCIONAL (lo dejamos por si quieres un detalle frontal) */
+    .logo {
+      position: absolute;
+      bottom: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 90px;
+      background: #ffcc00;
+      border-radius: 50%;
+      border: 3px solid #b30000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+      z-index: 2;
+    }
+    .logo-text {
+      font-size: 16px;
+      font-weight: bold;
+      color: #b30000;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* PALOMITAS DENTRO DEL CUBO (parte superior) */
+    .popcorn-inside {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 45%;  /* altura de la parte superior */
+      background: #fff8dc; /* color crema */
+      /* Borde superior muy redondeado para simular palomitas asomando */
+      border-top-left-radius: 100px;  
+      border-top-right-radius: 100px;
+      border-bottom: 2px solid #e60000;
+      z-index: 2;
+      overflow: hidden;
+    }
+
+    /*
+      Para hacer que las palomitas se vean más “claras” y con formas
+      irregulares, creamos varios divs “cluster” y pseudo-elementos
+      que imitan bultos de palomitas.
+    */
+    /* Pseudo-elementos para “bultos” principales */
+    .popcorn-inside::before,
+    .popcorn-inside::after {
+      content: "";
+      position: absolute;
+      background: #fff8dc;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
+    }
+    .popcorn-inside::before {
+      width: 50px;
+      height: 40px;
+      top: 25%;
+      left: 25%;
+      transform: rotate(-15deg);
+    }
+    .popcorn-inside::after {
+      width: 40px;
+      height: 30px;
+      top: 10%;
+      left: 60%;
+      transform: rotate(20deg);
+    }
+
+    /* Clusters de palomitas dentro del cubo */
+    .popcorn-cluster {
+      position: absolute;
+      background: #fff8dc;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.1);
+      z-index: 2;
+    }
+    .cluster-1 {
+      width: 35px; height: 30px;
+      top: 30%;
+      left: 10%;
+      transform: rotate(15deg);
+    }
+    .cluster-2 {
+      width: 30px; height: 25px;
+      top: 35%;
+      left: 50%;
+      transform: rotate(-10deg);
+    }
+    .cluster-3 {
+      width: 45px; height: 35px;
+      top: 40%;
+      left: 70%;
+      transform: rotate(5deg);
+    }
+    .cluster-4 {
+      width: 35px; height: 28px;
+      top: 15%;
+      left: 35%;
+      transform: rotate(-5deg);
+    }
+
+    /* PALOMITAS VOLADORAS (las que explotan) */
+    .flying-popcorn {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #fff8dc;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.2);
+      pointer-events: none;
+      transition: transform 1.2s ease-out, opacity 1.2s ease-out;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" id="popcornContainer">
+  <div class="bucket"></div>
+
+  <!-- Parte superior con palomitas “dentro” -->
+  <div class="popcorn-inside">
+    <!-- Varios “clusters” para dar la impresión de más palomitas -->
+    <div class="popcorn-cluster cluster-1"></div>
+    <div class="popcorn-cluster cluster-2"></div>
+    <div class="popcorn-cluster cluster-3"></div>
+    <div class="popcorn-cluster cluster-4"></div>
+  </div>
+
+  <!-- Logo (opcional) -->
+  <div class="logo">
+    <div class="logo-text">POP<br/>CORN</div>
+  </div>
+</div>
+
+<script>
+/*
+  AL PASAR EL RATÓN (mouseenter) => explosión de palomitas voladoras
+  AL SALIR (mouseleave) => eliminar las palomitas voladoras
+*/
+
+const popcornContainer = document.getElementById("popcornContainer");
+// Ajusta la cantidad y la distancia de vuelo
+const POPCORN_COUNT = 50;     // cantidad de palomitas que saltan
+const MAX_DISTANCE = 400;     // distancia máxima (en px) que pueden “volar”
+const FLY_DURATION = 1.2;     // duración de la transición en segundos
+
+function createPopcornExplosion() {
+  const rect = popcornContainer.getBoundingClientRect();
+
+  for (let i = 0; i < POPCORN_COUNT; i++) {
+    const popcorn = document.createElement("div");
+    popcorn.classList.add("flying-popcorn");
+
+    // Posición inicial: la zona de la "popcorn-inside"
+    // (para simular que salen de la parte superior del cubo)
+    const startX = rect.width / 2 - 10; 
+    const startY = rect.height * 0.3; // 30% de la altura del contenedor
+
+    popcorn.style.left = `${startX}px`;
+    popcorn.style.top = `${startY}px`;
+
+    popcornContainer.appendChild(popcorn);
+
+    // Forzar reflow (a veces necesario para que la transición inicie)
+    popcorn.getBoundingClientRect();
+
+    // Desplazamiento aleatorio en x e y
+    const randomX = (Math.random() - 0.5) * 2 * MAX_DISTANCE;
+    const randomY = (Math.random() - 0.5) * 2 * MAX_DISTANCE;
+    const randomAngle = Math.random() * 360;
+
+    popcorn.style.transform = `translate(${randomX}px, ${randomY}px) rotate(${randomAngle}deg)`;
+    popcorn.style.opacity = 0;
+  }
+}
+
+function removeFlyingPopcorn() {
+  const flying = document.querySelectorAll(".flying-popcorn");
+  flying.forEach(pop => pop.remove());
+}
+
+// EVENTOS
+popcornContainer.addEventListener("mouseenter", createPopcornExplosion);
+popcornContainer.addEventListener("mouseleave", removeFlyingPopcorn);
+</script>
+
+</body>
+</html>

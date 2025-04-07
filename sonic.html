@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plataformer Extendido - Recolecta Anillos</title>
+  <style>
+    body {
+      margin: 0;
+      background: #87CEEB; /* Cielo */
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #87CEEB;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Parámetros del mundo
+    const worldWidth = 4000;
+    const floorY = 560; // Nivel del suelo
+
+    // Control de teclas
+    const keys = {};
+    document.addEventListener('keydown', (e) => { keys[e.key] = true; });
+    document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+    // Parámetros físicos
+    const gravity = 0.6;
+
+    // Jugador
+    const player = {
+      x: 100,
+      y: floorY - 60,
+      width: 40,
+      height: 60,
+      vx: 0,
+      vy: 0,
+      speed: 4,
+      jumpStrength: 12,
+      onGround: false,
+      alive: true,
+      color: 'red'
+    };
+
+    // Cámara: offset en X
+    let cameraX = 0;
+
+    // Plataforma principal (suelo)
+    const platforms = [
+      { x: 0, y: floorY, width: worldWidth, height: 40 }
+    ];
+
+    // Agregamos algunas plataformas adicionales (ejemplo)
+    for (let i = 1; i <= 10; i++) {
+      platforms.push({
+        x: 300 * i,
+        y: floorY - (Math.random() * 150 + 50),
+        width: 120,
+        height: 20
+      });
+    }
+
+    // Generar muchos anillos repartidos aleatoriamente en el mundo
+    let rings = [];
+    for (let i = 0; i < 50; i++) {
+      rings.push({
+        x: Math.random() * (worldWidth - 100) + 50,
+        y: Math.random() * (floorY - 100) + 50,
+        radius: 10,
+        collected: false
+      });
+    }
+    let ringScore = 0;
+
+    // Generar muchos enemigos repartidos en el mundo
+    let enemies = [];
+    for (let i = 0; i < 20; i++) {
+      enemies.push({
+        x: Math.random() * (worldWidth - 200) + 100,
+        y: floorY - 40, // por lo general en el suelo
+        width: 40,
+        height: 40,
+        vx: (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random()*2),
+        alive: true,
+        color: 'green'
+      });
+    }
+
+    // Función para detectar colisión entre dos rectángulos
+    function rectCollision(a, b) {
+      return a.x < b.x + b.width &&
+             a.x + a.width > b.x &&
+             a.y < b.y + b.height &&
+             a.y + a.height > b.y;
+    }
+
+    // Función para detectar colisión entre jugador y círculo (anillo)
+    function circleCollision(player, ring) {
+      let distX = Math.abs(ring.x - (player.x + player.width/2));
+      let distY = Math.abs(ring.y - (player.y + player.height/2));
+      if(distX > (player.width/2 + ring.radius)) return false;
+      if(distY > (player.height/2 + ring.radius)) return false;
+      if(distX <= (player.width/2)) return true;
+      if(distY <= (player.height/2)) return true;
+      let dx = distX - player.width/2;
+      let dy = distY - player.height/2;
+      return (dx*dx + dy*dy <= (ring.radius * ring.radius));
+    }
+
+    // Actualizar estado del juego
+    function update() {
+      if (!player.alive) return;
+
+      // Movimiento horizontal
+      if (keys['ArrowLeft'] || keys['a']) {
+        player.vx = -player.speed;
+      } else if (keys['ArrowRight'] || keys['d']) {
+        player.vx = player.speed;
+      } else {
+        player.vx = 0;
+      }
+
+      // Salto
+      if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && player.onGround) {
+        player.vy = -player.jumpStrength;
+        player.onGround = false;
+      }
+
+      // Aplicar gravedad
+      player.vy += gravity;
+
+      // Actualizar posición
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // Colisión con plataformas
+      player.onGround = false;
+      for (let platform of platforms) {
+        if (rectCollision(player, platform)) {
+          // Si el jugador cae sobre la plataforma
+          if (player.vy >= 0 && player.y + player.height - player.vy <= platform.y + 5) {
+            player.y = platform.y - player.height;
+            player.vy = 0;
+            player.onGround = true;
+          }
+        }
+      }
+
+      // Recolectar anillos
+      for (let ring of rings) {
+        if (!ring.collected && circleCollision(player, ring)) {
+          ring.collected = true;
+          ringScore++;
+        }
+      }
+
+      // Actualizar enemigos
+      for (let enemy of enemies) {
+        if (!enemy.alive) continue;
+        enemy.x += enemy.vx;
+        // Rebotar en los bordes del mundo
+        if (enemy.x <= 0 || enemy.x + enemy.width >= worldWidth) {
+          enemy.vx *= -1;
+        }
+        // Colisión con el jugador
+        if (rectCollision(player, enemy)) {
+          // Si el jugador cae sobre el enemigo, este muere; si no, el jugador muere
+          if (player.y + player.height - 5 < enemy.y) {
+            enemy.alive = false;
+            player.vy = -player.jumpStrength/1.5; // rebote
+          } else {
+            player.alive = false;
+          }
+        }
+      }
+
+      // Limitar jugador dentro del mundo
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > worldWidth) player.x = worldWidth - player.width;
+      if (player.y > canvas.height) {
+        player.alive = false;
+      }
+
+      // Actualizar cámara para que siga al jugador
+      cameraX = player.x - canvas.width / 2;
+      if (cameraX < 0) cameraX = 0;
+      if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
+    }
+
+    // Función para dibujar elementos con desplazamiento de cámara
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Fondo (cielo)
+      ctx.fillStyle = "#87CEEB";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Dibujar plataformas
+      ctx.fillStyle = "#654321";
+      for (let platform of platforms) {
+        ctx.fillRect(platform.x - cameraX, platform.y, platform.width, platform.height);
+      }
+
+      // Dibujar anillos
+      for (let ring of rings) {
+        if (!ring.collected) {
+          ctx.beginPath();
+          ctx.arc(ring.x - cameraX, ring.y, ring.radius, 0, Math.PI * 2);
+          ctx.fillStyle = "gold";
+          ctx.fill();
+          ctx.closePath();
+        }
+      }
+
+      // Dibujar enemigos
+      for (let enemy of enemies) {
+        if (enemy.alive) {
+          ctx.fillStyle = enemy.color;
+          ctx.fillRect(enemy.x - cameraX, enemy.y, enemy.width, enemy.height);
+        }
+      }
+
+      // Dibujar jugador
+      if (player.alive) {
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x - cameraX, player.y, player.width, player.height);
+      } else {
+        ctx.fillStyle = "black";
+        ctx.font = "48px sans-serif";
+        ctx.fillText("Game Over", canvas.width/2 - 120, canvas.height/2);
+      }
+
+      // Dibujar puntuación
+      ctx.fillStyle = "black";
+      ctx.font = "24px sans-serif";
+      ctx.fillText("Anillos: " + ringScore, 10, 30);
+    }
+
+    // Bucle principal del juego
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

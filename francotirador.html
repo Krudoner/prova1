@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juego de Francotirador</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      border: 2px solid #fff;
+      background-color: #000;
+    }
+    #scoreboard {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 24px;
+      font-family: Arial, sans-serif;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreboard">Puntos: 0</div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreboard = document.getElementById("scoreboard");
+
+    // Variables del juego
+    let score = 0;
+    const gameDuration = 30; // Duración del juego: 30 segundos
+    let startTime = null;
+    let gameOver = false;
+
+    // Array de objetivos
+    let targets = [];
+
+    // Función para crear un objetivo con propiedades aleatorias
+    function createTarget() {
+      const radius = Math.random() * 20 + 20; // radio entre 20 y 40
+      const x = Math.random() * (canvas.width - 2 * radius) + radius;
+      const y = Math.random() * (canvas.height - 2 * radius) + radius;
+      const speed = Math.random() * 2 + 1; // velocidad entre 1 y 3
+      const angle = Math.random() * Math.PI * 2;
+      const dx = Math.cos(angle) * speed;
+      const dy = Math.sin(angle) * speed;
+      return { x, y, radius, dx, dy };
+    }
+
+    // Inicializar varios objetivos (en este ejemplo 5)
+    function initTargets(num) {
+      for (let i = 0; i < num; i++) {
+        targets.push(createTarget());
+      }
+    }
+
+    // Actualizar la posición de cada objetivo
+    function updateTargets() {
+      for (let target of targets) {
+        target.x += target.dx;
+        target.y += target.dy;
+        // Rebote en los bordes del canvas
+        if (target.x - target.radius < 0 || target.x + target.radius > canvas.width) {
+          target.dx = -target.dx;
+        }
+        if (target.y - target.radius < 0 || target.y + target.radius > canvas.height) {
+          target.dy = -target.dy;
+        }
+      }
+    }
+
+    // Dibujar los objetivos
+    function drawTargets() {
+      ctx.fillStyle = "red";
+      for (let target of targets) {
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Variables y función para dibujar la mira del francotirador
+    let mousePos = { x: canvas.width / 2, y: canvas.height / 2 };
+    canvas.addEventListener("mousemove", function(e) {
+      const rect = canvas.getBoundingClientRect();
+      mousePos.x = e.clientX - rect.left;
+      mousePos.y = e.clientY - rect.top;
+    });
+
+    function drawCrosshair() {
+      ctx.strokeStyle = "#00FF00";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      // Línea vertical
+      ctx.moveTo(mousePos.x, mousePos.y - 15);
+      ctx.lineTo(mousePos.x, mousePos.y + 15);
+      // Línea horizontal
+      ctx.moveTo(mousePos.x - 15, mousePos.y);
+      ctx.lineTo(mousePos.x + 15, mousePos.y);
+      ctx.stroke();
+    }
+
+    // Disparo: al hacer clic se verifica si se ha alcanzado algún objetivo
+    canvas.addEventListener("click", function(e) {
+      if (gameOver) return;
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      // Revisar los objetivos de atrás hacia adelante para evitar conflictos
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const target = targets[i];
+        const dist = Math.hypot(target.x - clickX, target.y - clickY);
+        if (dist <= target.radius) {
+          // Objetivo alcanzado: sumar puntos y eliminar el objetivo
+          score += 10;
+          scoreboard.textContent = "Puntos: " + score;
+          targets.splice(i, 1);
+          // Generar un nuevo objetivo para mantener la cantidad
+          targets.push(createTarget());
+          break; // Dispara a un solo objetivo por clic
+        }
+      }
+    });
+
+    // Dibujar el temporizador en la pantalla
+    function drawTimer(timeLeft) {
+      ctx.fillStyle = "#FFF";
+      ctx.font = "24px Arial";
+      ctx.textAlign = "right";
+      ctx.fillText("Tiempo: " + timeLeft.toFixed(0) + "s", canvas.width - 10, 30);
+    }
+
+    // Bucle principal del juego
+    function gameLoop(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const elapsed = (timestamp - startTime) / 1000; // tiempo transcurrido en segundos
+      let timeLeft = gameDuration - elapsed;
+      if (timeLeft <= 0) {
+        gameOver = true;
+        timeLeft = 0;
+      }
+      
+      // Limpiar el canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Actualizar y dibujar los objetivos
+      updateTargets();
+      drawTargets();
+      
+      // Dibujar la mira del francotirador
+      drawCrosshair();
+      
+      // Dibujar el temporizador
+      drawTimer(timeLeft);
+      
+      if (!gameOver) {
+        requestAnimationFrame(gameLoop);
+      } else {
+        // Mostrar mensaje de fin de juego
+        ctx.fillStyle = "#FFF";
+        ctx.font = "48px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("¡Fin del juego!", canvas.width / 2, canvas.height / 2);
+        ctx.font = "32px Arial";
+        ctx.fillText("Puntuación final: " + score, canvas.width / 2, canvas.height / 2 + 50);
+      }
+    }
+
+    // Inicialización y comienzo del juego
+    initTargets(5);
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juego de Billar Americano</title>
+  <style>
+    body {
+      background-color: #006600;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    canvas {
+      border: 2px solid #663300;
+      background-color: #228B22;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <script>
+    // Configuración del canvas y variables globales
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Definición de la mesa y troneras
+    const table = {
+      width: canvas.width,
+      height: canvas.height,
+      pockets: [
+        { x: 0, y: 0 },
+        { x: canvas.width / 2, y: 0 },
+        { x: canvas.width, y: 0 },
+        { x: 0, y: canvas.height },
+        { x: canvas.width / 2, y: canvas.height },
+        { x: canvas.width, y: canvas.height }
+      ],
+      pocketRadius: 18
+    };
+
+    // Clase Bola
+    class Ball {
+      constructor(x, y, radius, color, number, type) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.number = number; // 0 para la blanca, 8 para la negra, etc.
+        this.type = type; // "cue", "solid", "stripe" o "eight"
+        this.vx = 0;
+        this.vy = 0;
+        this.inPocket = false;
+      }
+      
+      draw() {
+        if (this.inPocket) return;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.stroke();
+        // Dibuja el número si no es la bola blanca
+        if (this.number !== 0) {
+          ctx.fillStyle = "#FFF";
+          ctx.font = "bold 14px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(this.number, this.x, this.y);
+        }
+      }
+      
+      update() {
+        if (this.inPocket) return;
+        // Actualizar posición
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        // Aplicar fricción
+        this.vx *= 0.99;
+        this.vy *= 0.99;
+        
+        // Si la velocidad es muy baja, detener la bola
+        if (Math.abs(this.vx) < 0.01) this.vx = 0;
+        if (Math.abs(this.vy) < 0.01) this.vy = 0;
+        
+        // Rebote en los bordes de la mesa (simplificado)
+        if (this.x - this.radius < 0 || this.x + this.radius > table.width) {
+          this.vx = -this.vx;
+          this.x = this.x - this.radius < 0 ? this.radius : table.width - this.radius;
+        }
+        if (this.y - this.radius < 0 || this.y + this.radius > table.height) {
+          this.vy = -this.vy;
+          this.y = this.y - this.radius < 0 ? this.radius : table.height - this.radius;
+        }
+      }
+    }
+
+    // Inicialización de las bolas
+    let balls = [];
+    const ballRadius = 10;
+    // Bola blanca (cue ball)
+    balls.push(new Ball(100, canvas.height / 2, ballRadius, "#FFF", 0, "cue"));
+
+    // Posición de la formación de bolas de objeto (zona opuesta a la bola blanca)
+    let formationX = canvas.width - 200;
+    let formationY = canvas.height / 2;
+
+    // Números de bolas para el juego (1-15, con la 8 en el centro de la formación)
+    let ballNumbers = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    // Filtrar la bola 8 y mezclar las restantes aleatoriamente
+    ballNumbers = ballNumbers.filter(n => n !== 8);
+    ballNumbers.sort(() => Math.random() - 0.5);
+    // Insertar la bola 8 en la posición central
+    ballNumbers.splice(4, 0, 8);
+
+    // Función para asignar colores (para simplificar, se usan colores fijos)
+    function getBallColor(num) {
+      if (num === 0) return "#FFF";
+      if (num === 8) return "#000";
+      // Bolas 1-7: sólidos; 9-15: rayadas (se usan los mismos colores)
+      const colors = ["#FFCC00", "#0000FF", "#FF0000", "#660066", "#FF6600", "#006600", "#800000"];
+      if (num < 8) return colors[num - 1];
+      else return colors[num - 9];
+    }
+
+    // Crear la formación triangular de bolas de objeto
+    let index = 0;
+    const rows = 5;
+    for (let row = 0; row < rows; row++) {
+      for (let i = 0; i <= row; i++) {
+        let x = formationX + row * (ballRadius * 2 * 0.9);
+        let y = formationY - row * ballRadius + i * (ballRadius * 2);
+        let num = ballNumbers[index++];
+        let type = "solid";
+        if (num === 8) {
+          type = "eight";
+        } else if (num > 8) {
+          type = "stripe";
+        }
+        balls.push(new Ball(x, y, ballRadius, getBallColor(num), num, type));
+      }
+    }
+
+    // Variables para el disparo
+    let isAiming = false;
+    let aimStart = { x: 0, y: 0 };
+    let aimCurrent = { x: 0, y: 0 };
+
+    // Variables de turno y asignación de grupos a los jugadores
+    let currentPlayer = 1; // 1 o 2
+    let playerGroups = { 1: null, 2: null }; // "solid" o "stripe"
+    let gameActive = true;
+
+    // Función para detectar colisiones entre dos bolas
+    function detectCollision(ball1, ball2) {
+      const dx = ball1.x - ball2.x;
+      const dy = ball1.y - ball2.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < ball1.radius + ball2.radius;
+    }
+
+    // Función para resolver colisiones de forma simple
+    function resolveCollision(ball1, ball2) {
+      const dx = ball2.x - ball1.x;
+      const dy = ball2.y - ball1.y;
+      const collisionAngle = Math.atan2(dy, dx);
+      const speed1 = Math.sqrt(ball1.vx * ball1.vx + ball1.vy * ball1.vy);
+      const speed2 = Math.sqrt(ball2.vx * ball2.vx + ball2.vy * ball2.vy);
+      const direction1 = Math.atan2(ball1.vy, ball1.vx);
+      const direction2 = Math.atan2(ball2.vy, ball2.vx);
+
+      const velocityX1 = speed1 * Math.cos(direction1 - collisionAngle);
+      const velocityY1 = speed1 * Math.sin(direction1 - collisionAngle);
+      const velocityX2 = speed2 * Math.cos(direction2 - collisionAngle);
+      const velocityY2 = speed2 * Math.sin(direction2 - collisionAngle);
+
+      // Intercambio de velocidades en el eje de la colisión (modelo 1D)
+      const finalVelocityX1 = velocityX2;
+      const finalVelocityX2 = velocityX1;
+
+      // Convertir de nuevo a coordenadas originales
+      ball1.vx = Math.cos(collisionAngle) * finalVelocityX1 + Math.cos(collisionAngle + Math.PI / 2) * velocityY1;
+      ball1.vy = Math.sin(collisionAngle) * finalVelocityX1 + Math.sin(collisionAngle + Math.PI / 2) * velocityY1;
+      ball2.vx = Math.cos(collisionAngle) * finalVelocityX2 + Math.cos(collisionAngle + Math.PI / 2) * velocityY2;
+      ball2.vy = Math.sin(collisionAngle) * finalVelocityX2 + Math.sin(collisionAngle + Math.PI / 2) * velocityY2;
+    }
+
+    // Función para detectar si una bola entra en una tronera
+    function checkPockets(ball) {
+      for (const pocket of table.pockets) {
+        const dx = ball.x - pocket.x;
+        const dy = ball.y - pocket.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < table.pocketRadius) {
+          ball.inPocket = true;
+          ball.vx = 0;
+          ball.vy = 0;
+          // Aquí se puede agregar la lógica para actualizar el estado del juego
+          // (por ejemplo, si se mete la bola blanca, la bola 8 o alguna bola de cada grupo)
+        }
+      }
+    }
+
+    // Función para actualizar el estado de todas las bolas
+    function update() {
+      balls.forEach(ball => {
+        ball.update();
+        checkPockets(ball);
+      });
+      // Comprobar y resolver colisiones entre bolas
+      for (let i = 0; i < balls.length; i++) {
+        for (let j = i + 1; j < balls.length; j++) {
+          if (!balls[i].inPocket && !balls[j].inPocket && detectCollision(balls[i], balls[j])) {
+            resolveCollision(balls[i], balls[j]);
+          }
+        }
+      }
+    }
+
+    // Función para dibujar la mesa, troneras y bolas
+    function draw() {
+      // Limpiar el canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Dibujar la mesa
+      ctx.fillStyle = "#006600";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Dibujar las troneras
+      ctx.fillStyle = "#000";
+      table.pockets.forEach(pocket => {
+        ctx.beginPath();
+        ctx.arc(pocket.x, pocket.y, table.pocketRadius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      // Dibujar las bolas
+      balls.forEach(ball => ball.draw());
+
+      // Si se está apuntando, dibujar una línea guía desde la bola blanca
+      if (isAiming) {
+        ctx.beginPath();
+        ctx.moveTo(balls[0].x, balls[0].y);
+        ctx.lineTo(aimCurrent.x, aimCurrent.y);
+        ctx.strokeStyle = "#FFF";
+        ctx.stroke();
+      }
+    }
+
+    // Manejo del disparo con el mouse
+    canvas.addEventListener("mousedown", function(e) {
+      // Solo permitir disparar si ninguna bola se mueve
+      const moving = balls.some(ball => Math.abs(ball.vx) > 0 || Math.abs(ball.vy) > 0);
+      if (moving) return;
+      isAiming = true;
+      const rect = canvas.getBoundingClientRect();
+      aimStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      aimCurrent = { ...aimStart };
+    });
+
+    canvas.addEventListener("mousemove", function(e) {
+      if (isAiming) {
+        const rect = canvas.getBoundingClientRect();
+        aimCurrent = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+    });
+
+    canvas.addEventListener("mouseup", function(e) {
+      if (isAiming) {
+        isAiming = false;
+        // Calcular el vector de disparo desde la posición de la bola blanca
+        const dx = balls[0].x - aimCurrent.x;
+        const dy = balls[0].y - aimCurrent.y;
+        // Ajustar la potencia del disparo (el factor 0.1 se puede modificar)
+        balls[0].vx = dx * 0.1;
+        balls[0].vy = dy * 0.1;
+
+        // Aquí se debe implementar la lógica para:
+        // - Validar que el tiro sea legal (por ejemplo, que la bola blanca golpee primero la bola de su grupo)
+        // - Asignar grupos a los jugadores tras el primer tiro válido
+        // - Detectar faltas (como meter la bola blanca) y cambiar el turno en consecuencia
+      }
+    });
+
+    // Bucle principal del juego
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Iniciar el juego
+    gameLoop();
+  </script>
+</body>
+</html>

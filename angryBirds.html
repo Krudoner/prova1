@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Angry Birds - Clone Básico</title>
+  <style>
+    body {
+      margin: 0;
+      background: #87CEEB; /* cielo */
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #87CEEB;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    // Configuración del canvas y contexto
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Variables físicas
+    const gravity = 0.5;
+    const groundY = canvas.height - 50; // Nivel del suelo
+
+    // Objeto "pájaro"
+    const bird = {
+      x: 150,
+      y: groundY - 15, // posicion inicial sobre el suelo
+      radius: 15,
+      color: 'red',
+      vx: 0,
+      vy: 0,
+      isLaunched: false
+    };
+
+    // Obstáculos (rectángulos) para simular estructuras
+    const obstacles = [
+      { x: 500, y: groundY - 50, width: 50, height: 50, color: 'brown' },
+      { x: 560, y: groundY - 50, width: 50, height: 50, color: 'brown' }
+    ];
+
+    // Variables para el arrastre (sling)
+    let startDrag = null;
+    let currentDrag = null;
+
+    // Eventos de ratón para arrastrar y soltar
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      // Si se hace clic cerca del pájaro y aún no ha sido lanzado
+      const dx = mouseX - bird.x;
+      const dy = mouseY - bird.y;
+      if (Math.sqrt(dx*dx + dy*dy) < bird.radius + 5 && !bird.isLaunched) {
+        startDrag = { x: mouseX, y: mouseY };
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (startDrag) {
+        const rect = canvas.getBoundingClientRect();
+        currentDrag = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (startDrag && currentDrag) {
+        // Calcular la velocidad inicial en función del vector de arrastre
+        const dx = startDrag.x - currentDrag.x;
+        const dy = startDrag.y - currentDrag.y;
+        bird.vx = dx / 10;
+        bird.vy = dy / 10;
+        bird.isLaunched = true;
+      }
+      startDrag = null;
+      currentDrag = null;
+    });
+
+    // Función para actualizar la física
+    function update() {
+      if (bird.isLaunched) {
+        // Aplicar gravedad
+        bird.vy += gravity;
+        bird.x += bird.vx;
+        bird.y += bird.vy;
+
+        // Colisión simple con el suelo
+        if (bird.y + bird.radius > groundY) {
+          bird.y = groundY - bird.radius;
+          bird.vy *= -0.5; // rebote simple
+          bird.vx *= 0.5;
+          // Detenemos el movimiento si es muy lento
+          if (Math.abs(bird.vy) < 2) {
+            bird.isLaunched = false;
+          }
+        }
+      }
+    }
+
+    // Función para dibujar todo en el canvas
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Dibujar el suelo
+      ctx.fillStyle = '#654321';
+      ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+      // Dibujar obstáculos
+      obstacles.forEach(obstacle => {
+        ctx.fillStyle = obstacle.color;
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+
+      // Dibujar el pájaro
+      ctx.beginPath();
+      ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+      ctx.fillStyle = bird.color;
+      ctx.fill();
+      ctx.closePath();
+
+      // Si se está arrastrando, dibuja la línea (sling)
+      if (startDrag && currentDrag) {
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bird.x, bird.y);
+        ctx.lineTo(currentDrag.x, currentDrag.y);
+        ctx.stroke();
+      }
+    }
+
+    // Bucle principal de juego
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

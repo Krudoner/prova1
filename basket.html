@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canasta de Basketball</title>
+  <style>
+    body {
+      margin: 0;
+      background: #2d2d2d;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      background: #1d1d1d;
+      border: 2px solid #fff;
+      display: block;
+    }
+    #scoreboard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 24px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px 20px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreboard">Puntos: 0</div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreboard = document.getElementById('scoreboard');
+
+    // Configuración física
+    const gravity = 0.5;
+    const floorY = canvas.height - 30; // suelo
+
+    // Objeto pelota
+    const ball = {
+      x: 150,
+      y: floorY - 15,
+      radius: 15,
+      color: 'orange',
+      vx: 0,
+      vy: 0,
+      isLaunched: false
+    };
+
+    // Definir la canasta (su "aro")
+    // Ubicada en la parte derecha superior del canvas
+    const basket = {
+      x: 650,      // posición horizontal
+      y: 150,      // posición vertical
+      width: 100,  // ancho del aro
+      height: 10   // grosor del aro
+    };
+
+    let score = 0;
+
+    // Variables para el arrastre (simulando el lanzamiento)
+    let dragStart = null;
+    let dragCurrent = null;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      // Si se hace clic cerca de la pelota y aún no ha sido lanzada
+      const dx = mouseX - ball.x;
+      const dy = mouseY - ball.y;
+      if (Math.sqrt(dx * dx + dy * dy) < ball.radius + 5 && !ball.isLaunched) {
+        dragStart = { x: mouseX, y: mouseY };
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (dragStart) {
+        const rect = canvas.getBoundingClientRect();
+        dragCurrent = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (dragStart && dragCurrent) {
+        // Calcular velocidad inicial a partir del vector de arrastre
+        const dx = dragStart.x - dragCurrent.x;
+        const dy = dragStart.y - dragCurrent.y;
+        ball.vx = dx / 10;
+        ball.vy = dy / 10;
+        ball.isLaunched = true;
+      }
+      dragStart = null;
+      dragCurrent = null;
+    });
+
+    // Función para resetear la pelota a su posición inicial
+    function resetBall() {
+      ball.x = 150;
+      ball.y = floorY - ball.radius;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.isLaunched = false;
+    }
+
+    // Detectar si la pelota "anota" en la canasta
+    // Usamos la posición del aro: si la pelota pasa por encima de la línea del aro
+    function checkScore() {
+      // Verificar que la pelota esté en la zona del aro y que su trayectoria la lleve por debajo del aro
+      if (
+        ball.x + ball.radius > basket.x &&
+        ball.x - ball.radius < basket.x + basket.width &&
+        ball.y - ball.radius < basket.y + basket.height &&
+        ball.y + ball.radius > basket.y
+      ) {
+        score++;
+        scoreboard.textContent = "Puntos: " + score;
+        resetBall();
+      }
+    }
+
+    // Actualizar física y posición
+    function update() {
+      if (ball.isLaunched) {
+        ball.vy += gravity;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Colisión con el suelo
+        if (ball.y + ball.radius > floorY) {
+          ball.y = floorY - ball.radius;
+          ball.vy *= -0.6; // rebote
+          ball.vx *= 0.6;  // fricción
+          if (Math.abs(ball.vy) < 2) {
+            // Si la pelota se mueve muy lento, la reseteamos
+            resetBall();
+          }
+        }
+
+        // Si la pelota sale del canvas, la reseteamos
+        if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+          resetBall();
+        }
+
+        // Comprobar si se anota
+        checkScore();
+      }
+    }
+
+    // Dibujar la canasta (aro)
+    function drawBasket() {
+      ctx.beginPath();
+      // Dibujamos un rectángulo que simula el aro
+      ctx.rect(basket.x, basket.y, basket.width, basket.height);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    // Dibujar la pelota
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = ball.color;
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    // Dibujar la línea de lanzamiento (cuando se arrastra la pelota)
+    function drawSling() {
+      if (dragStart && dragCurrent) {
+        ctx.beginPath();
+        ctx.moveTo(ball.x, ball.y);
+        ctx.lineTo(dragCurrent.x, dragCurrent.y);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.closePath();
+      }
+    }
+
+    // Dibujar el suelo
+    function drawFloor() {
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, floorY, canvas.width, canvas.height - floorY);
+    }
+
+    // Bucle principal de juego
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      update();
+      drawFloor();
+      drawBasket();
+      drawBall();
+      drawSling();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
